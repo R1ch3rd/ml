@@ -1,0 +1,98 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import KFold
+from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc, accuracy_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+import matplotlib.pyplot as plt
+
+data = pd.read_csv('/content/heart.csv')
+
+display(data.head())
+
+X = data.drop(columns=['target']).values
+y = data['target'].values
+
+logreg_model = LogisticRegression(max_iter=10000, random_state=42)
+nb_model = GaussianNB()
+
+def evaluate_model(model, X, y, k=10):
+    kf = KFold(n_splits=k, shuffle=True, random_state=42)
+    y_true = []
+    y_pred = []
+    y_proba = []
+
+    for train_index, test_index in kf.split(X):
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+
+        model.fit(X_train, y_train)
+        predictions = model.predict(X_test)
+        probabilities = model.predict_proba(X_test)[:, 1]
+
+        y_true.extend(y_test)
+        y_pred.extend(predictions)
+        y_proba.extend(probabilities)
+
+    # Convert lists to numpy arrays
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    y_proba = np.array(y_proba)
+
+    return y_true, y_pred, y_proba
+
+y_true_logreg, y_pred_logreg, y_proba_logreg = evaluate_model(logreg_model, X, y, k=10)
+y_true_nb, y_pred_nb, y_proba_nb = evaluate_model(nb_model, X, y, k=10)
+
+def plot_confusion_matrix(cm, title):
+    plt.figure(figsize=(10, 7))
+    plt.imshow(cm, cmap=plt.cm.Blues)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(2)
+    plt.xticks(tick_marks, ['0', '1'])
+    plt.yticks(tick_marks, ['0', '1'])
+    thresh = cm.max() / 2.
+    for (i, j), val in np.ndenumerate(cm):
+      plt.text(j, i, f'{val}', ha='center', 
+      color='white' if val > thresh else 'black')
+
+    plt.ylabel('Actual')
+    plt.xlabel('Predicted')
+    plt.show()
+
+cm_logreg = confusion_matrix(y_true_logreg, y_pred_logreg)
+plot_confusion_matrix(cm_logreg, 'Confusion Matrix - Logistic Regression')
+
+cm_nb = confusion_matrix(y_true_nb, y_pred_nb)
+plot_confusion_matrix(cm_nb, 'Confusion Matrix - Naive Bayes')
+
+print('Classification Report - Logistic Regression:')
+print(classification_report(y_true_logreg, y_pred_logreg))
+
+print('Classification Report - Naive Bayes:')
+print(classification_report(y_true_nb, y_pred_nb))
+
+accuracy_logreg = accuracy_score(y_true_logreg, y_pred_logreg)
+print(f'Accuracy - Logistic Regression: {accuracy_logreg:.2f}')
+
+accuracy_nb = accuracy_score(y_true_nb, y_pred_nb)
+print(f'Accuracy - Naive Bayes: {accuracy_nb:.2f}')
+
+fpr_logreg, tpr_logreg, _ = roc_curve(y_true_logreg, y_proba_logreg)
+roc_auc_logreg = auc(fpr_logreg, tpr_logreg)
+
+fpr_nb, tpr_nb, _ = roc_curve(y_true_nb, y_proba_nb)
+roc_auc_nb = auc(fpr_nb, tpr_nb)
+
+plt.figure()
+plt.plot(fpr_logreg, tpr_logreg, color='darkorange', lw=2, label='Logistic Regression (area = %0.2f)' % roc_auc_logreg)
+plt.plot(fpr_nb, tpr_nb, color='blue', lw=2, label='Naive Bayes (area = %0.2f)' % roc_auc_nb)
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic')
+plt.legend(loc="lower right")
+plt.show()
